@@ -63,17 +63,17 @@ app.post("/user/register", (req, res) => {
 
 
 app.post("/user/login", (req, res) => {
-    const { user_email, user_password } = req.body;
+    const { email, password } = req.body;
   
     // Vérification des champs obligatoires
-    if (!user_email || !user_password) {
+    if (!email || !password) {
       return res.status(400).json({
         error: "Toutes les informations nécessaires doivent être fournies",
       });
     }
   
     // Rechercher l'utilisateur par email
-    db.get("SELECT * FROM utilisateurs WHERE email = ?", [user_email], (err, row) => {
+    db.get("SELECT * FROM utilisateurs WHERE email = ?", [email], (err, row) => {
       if (err) {
         console.error(
           "Erreur lors de la vérification des informations d'identification :",
@@ -90,7 +90,7 @@ app.post("/user/login", (req, res) => {
       }
   
       // Comparer le mot de passe fourni avec le mot de passe hashé dans la base de données
-      bcrypt.compare(user_password, row.password_hash, (err, result) => {
+      bcrypt.compare(password, row.password_hash, (err, result) => {
         if (err) {
           console.error("Erreur lors de la comparaison des mots de passe:", err.message);
           return res.status(500).json({ error: "Erreur interne du serveur" });
