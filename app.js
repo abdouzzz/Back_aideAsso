@@ -20,7 +20,7 @@ app.listen(port, () => {
 
 
 
-app.post("/register", (req, res) => {
+app.post("/user/register", (req, res) => {
     const { username, email, nom, prenom, password, confirmed_password } = req.body; // Récupérer les données du body
 
     if (!username || !email || !nom || !prenom || !password || !confirmed_password) {
@@ -62,7 +62,7 @@ app.post("/register", (req, res) => {
 });
 
 
-app.post("/login", (req, res) => {
+app.post("/user/login", (req, res) => {
     const { user_email, user_password } = req.body;
   
     // Vérification des champs obligatoires
