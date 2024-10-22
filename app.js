@@ -55,7 +55,13 @@ app.post("/user/register", (req, res) => {
                 }
 
                 // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
-                res.json({ id_user: this.lastID, email });
+                res.json({ 
+                  data: {
+                  message: "Connexion réussie",
+                  body: {
+                      
+                  },
+                }, });
             }
         );
     });
@@ -105,13 +111,11 @@ app.post("/user/login", (req, res) => {
   
         // Si la comparaison réussit
         return res.status(200).json({
-          data: {
             message: "Connexion réussie",
             body: {
                 id: row.id,
                 email: row.email,
                 nom: row.nom,
-            },
           },
         });
       });
