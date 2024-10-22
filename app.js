@@ -145,7 +145,7 @@ app.post("/association/add", (req, res) => {
         }
         )})
 
-app.get("/user/id/:id", (req, res) => {
+app.get("/user/:id", (req, res) => {
   const user_id = req.params.id;
   db.get(
     `SELECT * FROM utilisateurs WHERE id =?`,
@@ -160,7 +160,11 @@ app.get("/user/id/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
-      res.json(row);
+      const body = row;
+      res.json({
+        message: "Connexion réussie",
+        body
+      });
     }
   );
 })
