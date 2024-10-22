@@ -104,14 +104,14 @@ app.post("/user/login", (req, res) => {
         }
   
         // Si la comparaison réussit
-        res.json({
-          message: "Connexion réussie",
-          user: {
-            id: row.id,
-            username: row.username,
-            email: row.email,
-            nom: row.nom,
-            prenom: row.prenom,
+        return res.status(200).json({
+          data: {
+            message: "Connexion réussie",
+            body: {
+                id: row.id,
+                email: row.email,
+                nom: row.nom,
+            },
           },
         });
       });
