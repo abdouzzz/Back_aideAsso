@@ -60,10 +60,11 @@ CREATE TABLE documents (
 );
 
 -- Trésorerie 
-CREATE TABLE tresorerie
+CREATE TABLE tresorerie (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom_transaction VARCHAR(255) NOT NULL,
     association_id INTEGER REFERENCES associations(id) ON DELETE CASCADE,
     operation REAL NOT NULL,
-    date_operation DATE NOT NULL
+    date_operation DATE NOT NULL,
     tiers VARCHAR(255) NOT NULL
+);
