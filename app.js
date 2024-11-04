@@ -18,8 +18,6 @@ app.listen(port, () => {
   console.log(`Server is listening on port ${port}`);
 });
 
-
-
 app.post("/user/register", (req, res) => {
     const { username, email, nom, prenom, password, confirmed_password } = req.body; // Récupérer les données du body
 
@@ -172,11 +170,7 @@ app.get("/user/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
-      const body = row;
-      res.json({
-        message: "Connexion réussie",
-        body
-      });
+      res.json({row});
     }
   );
 })
@@ -196,7 +190,7 @@ app.get("/association/id/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Association non trouvé" });
       }
-      res.json(row);
+      res.json({row});
     }
   );
 })
@@ -242,7 +236,7 @@ app.get("/association/:id/membres", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
-            res.json(row);
+            res.json({row});
           }
   ) 
 })
@@ -350,3 +344,46 @@ app.put("/association/update/:id", (req, res) => {
     }
   });
 });
+
+app.post("/tresorerie/add", (req, res) => {
+  const {nom_transaction, association_id, operation, date_operation, tiers} = req.body;
+  if(!nom_transaction || !association_id || !date_operation || !operation || !tiers){
+    return res.status(400).json({
+      error: "Certaines informations sont manquantes",
+  });
+  }
+
+db.run(`INSERT INTO tresorerie (nom_transaction, association_id, operation, date_operation, tiers)
+        VALUES (?, ?, ?, ?, ?)`,
+      [nom_transaction, association_id, operation, date_operation, tiers],
+      function (err) {
+        if (err) {
+            console.error("Erreur lors de l'ajout de la transaction :", err.message);
+            return res.status(500).json({ error: "Erreur interne du serveur" });
+        }
+
+        // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+        res.json({ id_membre: this.lastID });
+    })
+
+});
+
+app.get("/association/:id/tresorerie",  (req, res) => {
+  const asso_id = req.params.id;
+  db.all(`SELECT * FROM tresorerie 
+          WHERE association_id =?`,
+          [asso_id],
+          (err, row) => {
+            if (err) {
+              console.error(err.message);
+              return res
+                .status(500)
+                .json({ error: "Erreur lors de la récupération des transactions" });
+            }
+            if (!row) {
+              return res.status(404).json({ error: "Aucune transaction trouvé" });
+            }
+            res.json({row});
+          }
+  ) 
+})
