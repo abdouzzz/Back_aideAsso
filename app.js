@@ -18,8 +18,6 @@ app.listen(port, () => {
   console.log(`Server is listening on port ${port}`);
 });
 
-
-
 app.post("/user/register", (req, res) => {
     const { username, email, nom, prenom, password, confirmed_password } = req.body; // Récupérer les données du body
 
@@ -172,11 +170,7 @@ app.get("/user/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
-      const body = row;
-      res.json({
-        message: "Connexion réussie",
-        body
-      });
+      res.json({row});
     }
   );
 })
@@ -196,7 +190,7 @@ app.get("/association/id/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Association non trouvé" });
       }
-      res.json(row);
+      res.json({row});
     }
   );
 })
@@ -242,7 +236,7 @@ app.get("/association/:id/membres", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
-            res.json(row);
+            res.json({row});
           }
   ) 
 })
@@ -373,3 +367,23 @@ db.run(`INSERT INTO tresorerie (nom_transaction, association_id, operation, date
     })
 
 });
+
+app.get("/association/:id/tresorerie",  (req, res) => {
+  const asso_id = req.params.id;
+  db.all(`SELECT * FROM tresorerie 
+          WHERE association_id =?`,
+          [asso_id],
+          (err, row) => {
+            if (err) {
+              console.error(err.message);
+              return res
+                .status(500)
+                .json({ error: "Erreur lors de la récupération des transactions" });
+            }
+            if (!row) {
+              return res.status(404).json({ error: "Aucune transaction trouvé" });
+            }
+            res.json({row});
+          }
+  ) 
+})
