@@ -350,3 +350,26 @@ app.put("/association/update/:id", (req, res) => {
     }
   });
 });
+
+app.post("/tresorerie/add", (req, res) => {
+  const {nom_transaction, association_id, operation, date_operation, tiers} = req.body;
+  if(!nom_transaction || !association_id || !date_operation || !operation || !tiers){
+    return res.status(400).json({
+      error: "Certaines informations sont manquantes",
+  });
+  }
+
+db.run(`INSERT INTO tresorerie (nom_transaction, association_id, operation, date_operation, tiers)
+        VALUES (?, ?, ?, ?, ?)`,
+      [nom_transaction, association_id, operation, date_operation, tiers],
+      function (err) {
+        if (err) {
+            console.error("Erreur lors de l'ajout de la transaction :", err.message);
+            return res.status(500).json({ error: "Erreur interne du serveur" });
+        }
+
+        // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+        res.json({ id_membre: this.lastID });
+    })
+
+});
