@@ -141,7 +141,19 @@ app.post("/association/add", (req, res) => {
             }
 
             // Si tout est correct, on renvoie l'ID de l'association et son nom
-            res.json({ id_association: this.lastID, nom });
+            console.log(this.lastID);
+            res.json({
+              message:"association crée",
+               id_association: this.lastID,
+               email,
+               nom
+            });
+
+      //       const body = row;
+      // res.json({
+      //   message: "Connexion réussie",
+      //   body
+      // });
         }
         )})
 
@@ -260,7 +272,7 @@ app.get("/user/:id/associations", (req, res) => {
 app.put("/user/update/:id", (req, res) => {
   const user_id = req.params.id;
   const updatedUser = req.body;
-  if (!updatedUser[0]) {
+  if (!updatedUser) {
     res.status(400).json({ error: "Updated user data is required" });
     return;
   }
@@ -274,8 +286,6 @@ app.put("/user/update/:id", (req, res) => {
         updatedUser[attribute] !== undefined &&
         updatedUser[attribute] !== ""
       ) {
-        console.log(updatedUser[attribute])
-        console.log(attribute)
         updateQuery += `${attribute} = ?, `;
         updateParams.push(updatedUser[attribute]);
       }
@@ -286,18 +296,57 @@ app.put("/user/update/:id", (req, res) => {
 
   updateQuery += " WHERE id = ?";
   updateParams.push(user_id);
-  console.log(updateQuery, updateParams)
   db.run(updateQuery, updateParams, function (err) {
     if (err) {
       console.error("Error updating user:", err.message);
       res.status(500).json({ error: "Internal server error." });
       return;
     }
-
     if (this.changes === 0) {
       res.status(404).json({ error: "User not found" });
     } else {
       res.json({ message: "User updated successfully" });
+    }
+  });
+});
+
+app.put("/association/update/:id", (req, res) => {
+  const asso_id = req.params.id;
+  const updatedAsso = req.body;
+  if (!updatedAsso) {
+    res.status(400).json({ error: "Updated association data is required" });
+    return;
+  }
+  let updateQuery = "UPDATE associations SET ";
+  const updateParams = [];
+  const validAttributes = ["nom", "description", "page_web_url", "email", "telphone", "adresse", "ville"];
+
+  for (const attribute in updatedAsso) {
+    if (validAttributes.includes(attribute)) {
+      if (
+        updatedAsso[attribute] !== undefined &&
+        updatedAsso[attribute] !== ""
+      ) {
+        updateQuery += `${attribute} = ?, `;
+        updateParams.push(updatedAsso[attribute]);
+      }
+    }
+  }
+
+  updateQuery = updateQuery.slice(0, -2);
+
+  updateQuery += " WHERE id = ?";
+  updateParams.push(asso_id);
+  db.run(updateQuery, updateParams, function (err) {
+    if (err) {
+      console.error("Error updating association:", err.message);
+      res.status(500).json({ error: "Internal server error." });
+      return;
+    }
+    if (this.changes === 0) {
+      res.status(404).json({ error: "Association not found" });
+    } else {
+      res.json({ message: "Association updated successfully" });
     }
   });
 });
