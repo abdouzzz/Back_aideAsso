@@ -428,3 +428,22 @@ app.delete("/user/delete/:id", (req,res) => {
     }
   );
 })
+
+app.delete("/membre/delete/:id", (req,res) => {
+  const membre_id = req.params.id;
+  db.run(
+    "DELETE FROM membres WHERE id = ?",
+    [membre_id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting user:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+        return;
+      } else {
+        res.json({
+          message: "Membres and related information deleted successfully",
+        });
+      }
+    }
+  );
+})
