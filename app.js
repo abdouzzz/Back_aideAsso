@@ -62,7 +62,6 @@ app.post("/user/register", (req, res) => {
                 console.log(this.lastID);
                 console.log(this);
                 res.json({ 
-                  data: {
                   message: "Connexion réussie",
                   body: {
                      id:this.lastID,
@@ -71,7 +70,7 @@ app.post("/user/register", (req, res) => {
                      lastName,
                      firstName
                   },
-                }, });
+                });
             }
         );
     });
@@ -118,15 +117,10 @@ app.post("/user/login", (req, res) => {
             error: "Connexion échouée. Vérifiez vos informations d'identification",
           });
         }
-  
         // Si la comparaison réussit
         return res.status(200).json({
             message: "Connexion réussie",
-            body: {
-                id: row.id,
-                email: row.email,
-                nom: row.nom,
-          },
+            body: row,
         });
       });
     });
@@ -151,19 +145,17 @@ app.post("/association/add", (req, res) => {
             }
 
             // Si tout est correct, on renvoie l'ID de l'association et son nom
-            console.log(this.lastID);
             res.json({
-              message:"association crée",
-               id_association: this.lastID,
+              message:"association créée",
+               body:{id: this.lastID,
                email,
-               nom
-            });
-
-      //       const body = row;
-      // res.json({
-      //   message: "Connexion réussie",
-      //   body
-      // });
+               nom,
+               numero_rna,
+               numero_siren,
+               page_web_url,
+               description,
+               telephone
+          }});
         }
         )})
 
@@ -182,7 +174,10 @@ app.get("/user/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
-      res.json({row});
+      res.json({
+        message:"utilisateur récupéré",
+        body:{row}
+      });
     }
   );
 })
@@ -202,7 +197,10 @@ app.get("/association/id/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Association non trouvé" });
       }
-      res.json({row});
+      res.json({
+        message:"association récupérée",
+        body:{row}
+      });
     }
   );
 })
@@ -224,9 +222,12 @@ db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_a
             console.error("Erreur lors de l'ajout du membre à l'association:", err.message);
             return res.status(500).json({ error: "Erreur interne du serveur" });
         }
-
-        // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
-        res.json({ id_membre: this.lastID });
+        res.json({ 
+          message:"Utilisateur ajouté à l'association",
+          body:{
+            id: this.lastID,
+          }
+        });
     })
 
 })
@@ -248,7 +249,10 @@ app.get("/association/:id/membres", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
-            res.json({row});
+            res.json({
+              message:`Membres de l'association ${asso_id}récupérés`,
+              body:{row}
+            });
           }
   ) 
 })
@@ -270,7 +274,10 @@ app.get("/user/:id/associations", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
-            res.json(row);
+            res.json({
+              message:`Associations de l'utilisateur ${user_id}récupérées`,
+              body:{row}
+            });
           }
   ) 
 })
@@ -395,7 +402,29 @@ app.get("/association/:id/tresorerie",  (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucune transaction trouvé" });
             }
-            res.json({row});
+            res.json({
+              message:`Transactions de l'association ${asso_id}récupérés`,
+              body:{row}
+            });
           }
   ) 
+})
+
+app.delete("/user/delete/:id", (req,res) => {
+  const user_id = req.params.id;
+  db.run(
+    "DELETE FROM utilisateurs WHERE id = ?",
+    [user_id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting user:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+        return;
+      } else {
+        res.json({
+          message: "User and related information deleted successfully",
+        });
+      }
+    }
+  );
 })
