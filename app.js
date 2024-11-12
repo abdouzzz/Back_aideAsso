@@ -59,11 +59,17 @@ app.post("/user/register", (req, res) => {
                 }
 
                 // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+                console.log(this.lastID);
+                console.log(this);
                 res.json({ 
                   data: {
                   message: "Connexion réussie",
                   body: {
-                      
+                     id:this.lastID,
+                     username,
+                     email,
+                     lastName,
+                     firstName
                   },
                 }, });
             }
