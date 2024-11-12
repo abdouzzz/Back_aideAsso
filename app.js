@@ -19,15 +19,15 @@ app.listen(port, () => {
 });
 
 app.post("/user/register", (req, res) => {
-    const { username, email, nom, prenom, password, confirmed_password } = req.body; // Récupérer les données du body
+    const { username, email, lastName, firstName, password, confirmPassword } = req.body; // Récupérer les données du body
 
-    if (!username || !email || !nom || !prenom || !password || !confirmed_password) {
+    if (!username || !email || !lastName || !firstName || !password || !confirmPassword) {
         return res.status(400).json({
             error: "Toutes les informations nécessaires doivent être fournies",
         });
     }
 
-    if(password !== confirmed_password){
+    if(password !== confirmPassword){
       return res.status(400).json({
         error: "Les mots de passe ne correspondent pas.",
       });
@@ -45,7 +45,7 @@ app.post("/user/register", (req, res) => {
             `
             INSERT INTO utilisateurs (username, email, nom, prenom, password_hash)
             VALUES (?, ?, ?, ?, ?)`,
-            [username, email, nom, prenom, hash],  // Le hash est stocké à la place du mot de passe en clair
+            [username, email, lastName, firstName, hash],  // Le hash est stocké à la place du mot de passe en clair
             function (err) {
                 if (err) {
                     console.error("Erreur lors de l'ajout de l'utilisateur:", err.message);
