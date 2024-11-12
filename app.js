@@ -19,9 +19,9 @@ app.listen(port, () => {
 });
 
 app.post("/user/register", (req, res) => {
-    const { username, email, lastName, firstName, password, confirmPassword } = req.body; // Récupérer les données du body
+    const { email, lastName, firstName, password, confirmPassword } = req.body; // Récupérer les données du body
 
-    if (!username || !email || !lastName || !firstName || !password || !confirmPassword) {
+    if (!email || !lastName || !firstName || !password || !confirmPassword) {
         return res.status(400).json({
             error: "Toutes les informations nécessaires doivent être fournies",
         });
@@ -32,6 +32,12 @@ app.post("/user/register", (req, res) => {
         error: "Les mots de passe ne correspondent pas.",
       });
     }
+
+    const firstNameInitial = firstName.charAt(0).toLowerCase(); // Première lettre du prénom en minuscule
+    const lastNameLower = lastName.toLowerCase(); // Nom en minuscule
+  
+    // Concaténer la première lettre du prénom et le nom
+    const username = firstNameInitial + lastNameLower
 
     // Hashage du mot de passe avec bcrypt
     bcrypt.hash(password, saltRounds, (err, hash) => {
