@@ -126,38 +126,59 @@ app.post("/user/login", (req, res) => {
     });
   });
 
-app.post("/association/add", (req, res) => {
-  const {id_rna, id_siren, id_correspondance, nom, sigle, objet, site, email, telephone } = req.body;
+  app.post("/association/add", (req, res) => {
+    const {numero_rna, numero_siren, nom, description, page_web_url, email, telephone, user_id, date_pub_jo } = req.body;
+    
+    if((!numero_rna && !numero_siren) || !nom || !description || !user_id || !date_pub_jo){
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes",
+    });
+    }
   
-  if((!id_rna && !id_siren) || !nom || !sigle || !objet){
-    return res.status(400).json({
-      error: "Certaines informations sont manquantes",
-  });
-  }
-
-  db.run(`INSERT INTO associations (nom, numero_rna, numero_siren, page_web_url, description, email, telephone)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [nom, id_rna, id_siren, site, objet, email, telephone],
-          function (err) {
-            if (err) {
-                console.error("Erreur lors de l'ajout de l'association:", err.message);
-                return res.status(500).json({ error: "Erreur interne du serveur" });
-            }
-
-            // Si tout est correct, on renvoie l'ID de l'association et son nom
-            res.json({
-              message:"association créée",
-               body:{id: this.lastID,
-               email,
-               nom,
-               numero_rna,
-               numero_siren,
-               page_web_url,
-               description,
-               telephone
-          }});
-        }
-        )})
+    db.run(`INSERT INTO associations (numero_rna, numero_siren, nom, description, page_web_url, email, telephone)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [numero_rna, numero_siren, nom, description, page_web_url, email, telephone],
+            function (err) {
+              if (err) {
+                  console.error("Erreur lors de l'ajout de l'association:", err.message);
+                  return res.status(500).json({ error: "Erreur interne du serveur" });
+              }
+              db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_actif)
+                VALUES (?, ?, ?, ?, ?)`,
+              [this.lastID, user_id, "président", date_pub_jo, true],
+              function (err) {
+                if (err) {
+                    console.error("Erreur lors de l'ajout du membre à l'association:", err.message);
+                    return res.status(500).json({ error: "Erreur interne du serveur" });
+                }
+                res.json({ 
+                  message:"Utilisateur ajouté à l'association",
+                  body:{
+                    numero_rna,
+                    numero_siren,
+                    nom,
+                    description,
+                    page_web_url,
+                    email,
+                    telephone,
+                    date_pub_jo
+                  }
+                });
+            })
+              // Si tout est correct, on renvoie l'ID de l'association et son nom
+            //   res.json({
+            //     message:"association créée",
+            //      body:{id: this.lastID,
+            //      email,
+            //      nom,
+            //      numero_rna,
+            //      numero_siren,
+            //      page_web_url,
+            //      description,
+            //      telephone
+            // }});
+          }
+          )})
 
 app.get("/user/:id", (req, res) => {
   const user_id = req.params.id;
