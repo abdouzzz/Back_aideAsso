@@ -143,6 +143,7 @@ app.post("/user/login", (req, res) => {
                   console.error("Erreur lors de l'ajout de l'association:", err.message);
                   return res.status(500).json({ error: "Erreur interne du serveur" });
               }
+              const id = this.lastID
               db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_actif)
                 VALUES (?, ?, ?, ?, ?)`,
               [this.lastID, user_id, "président", date_pub_jo, true],
@@ -151,9 +152,10 @@ app.post("/user/login", (req, res) => {
                     console.error("Erreur lors de l'ajout du membre à l'association:", err.message);
                     return res.status(500).json({ error: "Erreur interne du serveur" });
                 }
-                res.json({ 
+                res.status(200).json({ 
                   message:"Utilisateur ajouté à l'association",
                   body:{
+                    id,
                     numero_rna,
                     numero_siren,
                     nom,
