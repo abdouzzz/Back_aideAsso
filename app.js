@@ -197,7 +197,7 @@ app.get("/user/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
-      res.json({
+      res.status(200).json({
         message:"utilisateur récupéré",
         body:{row}
       });
@@ -220,7 +220,7 @@ app.get("/association/id/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Association non trouvé" });
       }
-      res.json({
+      res.status(200).json({
         message:"association récupérée",
         body:{row}
       });
@@ -237,7 +237,7 @@ app.post("/membres/add", (req, res) => {
   });
   }
 
-db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_actif)
+  db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_actif)
         VALUES (?, ?, ?, ?, ?)`,
       [id_association, id_user, role, date_adhesion, est_actif],
       function (err) {
@@ -245,7 +245,7 @@ db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_a
             console.error("Erreur lors de l'ajout du membre à l'association:", err.message);
             return res.status(500).json({ error: "Erreur interne du serveur" });
         }
-        res.json({ 
+        res.status(200).json({ 
           message:"Utilisateur ajouté à l'association",
           body:{
             id: this.lastID,
@@ -272,7 +272,7 @@ app.get("/association/:id/membres", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
-            res.json({
+            res.status(200).json({
               message:`Membres de l'association ${asso_id}récupérés`,
               body:{row}
             });
@@ -297,7 +297,7 @@ app.get("/user/:id/associations", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
-            res.json({
+            res.status(200).json({
               message:`Associations de l'utilisateur ${user_id}récupérées`,
               body:{row}
             });
@@ -341,7 +341,7 @@ app.put("/user/update/:id", (req, res) => {
     if (this.changes === 0) {
       res.status(404).json({ error: "User not found" });
     } else {
-      res.json({ message: "User updated successfully" });
+      res.status(200).json({ message: "User updated successfully" });
     }
   });
 });
@@ -382,7 +382,7 @@ app.put("/association/update/:id", (req, res) => {
     if (this.changes === 0) {
       res.status(404).json({ error: "Association not found" });
     } else {
-      res.json({ message: "Association updated successfully" });
+      res.status(200).json({ message: "Association updated successfully" });
     }
   });
 });
@@ -405,7 +405,7 @@ db.run(`INSERT INTO tresorerie (nom_transaction, association_id, operation, date
         }
 
         // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
-        res.json({ id_membre: this.lastID });
+        res.status(200).json({ id_membre: this.lastID });
     })
 
 });
@@ -425,7 +425,7 @@ app.get("/association/:id/tresorerie",  (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucune transaction trouvé" });
             }
-            res.json({
+            res.status(200).json({
               message:`Transactions de l'association ${asso_id}récupérés`,
               body:{row}
             });
@@ -444,7 +444,7 @@ app.delete("/user/delete/:id", (req,res) => {
         res.status(500).json({ error: "Internal server error" });
         return;
       } else {
-        res.json({
+        res.status(200).json({
           message: "User and related information deleted successfully",
         });
       }
@@ -463,7 +463,7 @@ app.delete("/membre/delete/:id", (req,res) => {
         res.status(500).json({ error: "Internal server error" });
         return;
       } else {
-        res.json({
+        res.status(200).json({
           message: "Membres and related information deleted successfully",
         });
       }
