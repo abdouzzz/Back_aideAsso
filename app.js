@@ -197,9 +197,11 @@ app.get("/user/:id", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
+      console.log(row);
       res.status(200).json({
         message:"utilisateur récupéré",
-        body:{row}
+        body:
+          row
       });
     }
   );
@@ -222,7 +224,8 @@ app.get("/association/id/:id", (req, res) => {
       }
       res.status(200).json({
         message:"association récupérée",
-        body:{row}
+        body:
+          row
       });
     }
   );
@@ -274,17 +277,19 @@ app.get("/association/:id/membres", (req, res) => {
             }
             res.status(200).json({
               message:`Membres de l'association ${asso_id}récupérés`,
-              body:{row}
+              body:
+                row
             });
           }
   ) 
 })
 
 app.get("/user/:id/associations", (req, res) => {
-  const user_id = req.params.id;
-  db.all(`SELECT m.*, u.username
+  const user_id = req.params.id;  
+  db.all(`SELECT m.*, u.*, a.*
     FROM membres m
     LEFT JOIN utilisateurs u ON m.user_id = u.id
+    LEFT JOIN associations a ON m.association_id = a.id
     WHERE user_id =?`,
           [user_id],
           (err, row) => {
@@ -297,9 +302,11 @@ app.get("/user/:id/associations", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
+            console.log(row);
             res.status(200).json({
               message:`Associations de l'utilisateur ${user_id}récupérées`,
-              body:{row}
+              body:
+                row
             });
           }
   ) 
@@ -427,7 +434,8 @@ app.get("/association/:id/tresorerie",  (req, res) => {
             }
             res.status(200).json({
               message:`Transactions de l'association ${asso_id}récupérés`,
-              body:{row}
+              body:
+                row
             });
           }
   ) 
@@ -456,6 +464,25 @@ app.delete("/membre/delete/:id", (req,res) => {
   const membre_id = req.params.id;
   db.run(
     "DELETE FROM membres WHERE id = ?",
+    [membre_id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting user:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+        return;
+      } else {
+        res.status(200).json({
+          message: "Membres and related information deleted successfully",
+        });
+      }
+    }
+  );
+})
+
+app.delete("/association/delete/:id", (req,res) => {
+  const membre_id = req.params.id;
+  db.run(
+    "DELETE FROM associations WHERE id = ?",
     [membre_id],
     function (err) {
       if (err) {
