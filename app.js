@@ -128,7 +128,7 @@ app.post("/user/login", (req, res) => {
 
 app.post("/association/add", (req, res) => {
     const {numero_rna, numero_siren, nom, description, page_web_url, email, telephone, user_id, date_pub_jo, logo } = req.body;
-    
+
     if((!numero_rna && !numero_siren) || !nom || !description || !user_id || !date_pub_jo){
       return res.status(400).json({
         error: "Certaines informations sont manquantes",
@@ -186,6 +186,28 @@ app.get("/user", (req, res) => {
       console.log(row);
       res.status(200).json({
         message:"utilisateurs récupérés",
+        body:
+          row
+      });
+    }
+  );
+})
+
+app.get("/associations", (req, res) => {
+  db.all(
+    `SELECT * FROM associations`,
+    (err, row) => {
+      if (err) {
+        console.error(err.message);
+        return res
+          .status(500)
+          .json({ error: "Erreur lors de la récupération des associations" });
+      }
+      if (!row) {
+        return res.status(404).json({ error: "Aucune association trouvé" });
+      }
+      res.status(200).json({
+        message:"associations récupérées",
         body:
           row
       });
@@ -592,5 +614,60 @@ app.put("/membre/update/:id", (req, res) => {
       console.log("salut", updateQuery, updateParams)
       res.status(200).json({ message: "Member updated successfully" });
     }
+  });
+});
+
+app.delete("/delete/membres/", (req, res) => {
+  const membres = req.body.deletedMembers;
+
+  if (!Array.isArray(membres) || membres.length === 0) {
+    return res.status(400).json({
+      error: "Un tableau de membres est requis",
+    });
+  }
+
+  const query = `DELETE FROM membres WHERE id = ?`;
+  for (const membre of membres) {
+    const { id_user } = membre;
+    console.log("id_user", id_user);
+    if (!id_user) {
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes pour un ou plusieurs membres",
+      });
+    }
+  }
+
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    const insertPromises = membres.map((membre) => {
+      return new Promise((resolve, reject) => {
+        db.run(
+          query,
+          [membre.id_user],
+          function (err) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve('supprimé');
+            }
+          }
+        );
+      });
+    });
+
+    Promise.all(insertPromises)
+      .then(() => {
+        db.run("COMMIT");
+        res.status(200).json({
+          message: "Tous les membres ont été supprimé avec succès",
+        });
+      })
+      .catch((err) => {
+        db.run("ROLLBACK");
+        console.error("Erreur lors de la suppression des membres:", err.message);
+        res.status(500).json({
+          error: "Erreur interne du serveur lors de la suppression des membres",
+        });
+      });
   });
 });
