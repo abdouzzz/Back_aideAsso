@@ -126,8 +126,8 @@ app.post("/user/login", (req, res) => {
     });
   });
 
-  app.post("/association/add", (req, res) => {
-    const {numero_rna, numero_siren, nom, description, page_web_url, email, telephone, user_id, date_pub_jo } = req.body;
+app.post("/association/add", (req, res) => {
+    const {numero_rna, numero_siren, nom, description, page_web_url, email, telephone, user_id, date_pub_jo, logo } = req.body;
     
     if((!numero_rna && !numero_siren) || !nom || !description || !user_id || !date_pub_jo){
       return res.status(400).json({
@@ -135,9 +135,9 @@ app.post("/user/login", (req, res) => {
     });
     }
   
-    db.run(`INSERT INTO associations (numero_rna, numero_siren, nom, description, page_web_url, email, telephone)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [numero_rna, numero_siren, nom, description, page_web_url, email, telephone],
+    db.run(`INSERT INTO associations (numero_rna, numero_siren, nom, description, page_web_url, email, telephone, logo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [numero_rna, numero_siren, nom, description, page_web_url, email, telephone, logo],
             function (err) {
               if (err) {
                   console.error("Erreur lors de l'ajout de l'association:", err.message);
@@ -167,20 +167,31 @@ app.post("/user/login", (req, res) => {
                   }
                 });
             })
-              // Si tout est correct, on renvoie l'ID de l'association et son nom
-            //   res.json({
-            //     message:"association créée",
-            //      body:{id: this.lastID,
-            //      email,
-            //      nom,
-            //      numero_rna,
-            //      numero_siren,
-            //      page_web_url,
-            //      description,
-            //      telephone
-            // }});
           }
-          )})
+        )})
+
+app.get("/user", (req, res) => {
+  db.all(
+    `SELECT * FROM utilisateurs`,
+    (err, row) => {
+      if (err) {
+        console.error(err.message);
+        return res
+          .status(500)
+          .json({ error: "Erreur lors de la récupération des utilisateur" });
+      }
+      if (!row) {
+        return res.status(404).json({ error: "Aucun trouvé" });
+      }
+      console.log(row);
+      res.status(200).json({
+        message:"utilisateurs récupérés",
+        body:
+          row
+      });
+    }
+  );
+})
 
 app.get("/user/:id", (req, res) => {
   const user_id = req.params.id;
@@ -231,36 +242,74 @@ app.get("/association/id/:id", (req, res) => {
   );
 })
 
-app.post("/membres/add", (req, res) => {
-  const {id_association, id_user, role, date_adhesion} = req.body;
-  const est_actif = true;
-  if(!id_association || !id_user || !date_adhesion || !role){
+app.post("/association/:id/add/membres/", (req, res) => {
+  const id_asso = req.params.id;
+  const membres = req.body.newMembres;
+
+  if (!Array.isArray(membres) || membres.length === 0) {
     return res.status(400).json({
-      error: "Certaines informations sont manquantes",
-  });
+      error: "Un tableau de membres est requis",
+    });
   }
 
-  db.run(`INSERT INTO membres (association_id, user_id, role, date_adhesion, est_actif)
-        VALUES (?, ?, ?, ?, ?)`,
-      [id_association, id_user, role, date_adhesion, est_actif],
-      function (err) {
-        if (err) {
-            console.error("Erreur lors de l'ajout du membre à l'association:", err.message);
-            return res.status(500).json({ error: "Erreur interne du serveur" });
-        }
-        res.status(200).json({ 
-          message:"Utilisateur ajouté à l'association",
-          body:{
-            id: this.lastID,
-          }
-        });
-    })
+  const query = `INSERT INTO membres (association_id, user_id, role, date_adhesion, est_actif) VALUES (?, ?, ?, ?, ?)`;
+  console.log(membres);
+  for (const membre of membres) {
+    const { id_user, role, date_adhesion, est_actif } = membre;
+    console.log("id_user", id_user);
+    console.log("role", role);
+    console.log("date_adhesion", date_adhesion);
+    console.log("est_actif", est_actif);
+    if (!id_user || !role || !date_adhesion) {
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes pour un ou plusieurs membres",
+      });
+    }
+  }
 
-})
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+
+    const insertPromises = membres.map((membre) => {
+      return new Promise((resolve, reject) => {
+        db.run(
+          query,
+          [id_asso, membre.id_user, membre.role, membre.date_adhesion, membre.est_actif],
+          function (err) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(this.lastID);
+            }
+          }
+        );
+      });
+    });
+
+    Promise.all(insertPromises)
+      .then((ids) => {
+        db.run("COMMIT");
+        res.status(200).json({
+          message: "Tous les membres ont été ajoutés avec succès",
+          body: {
+            ids,
+          },
+        });
+      })
+      .catch((err) => {
+        db.run("ROLLBACK");
+        console.error("Erreur lors de l'ajout des membres:", err.message);
+        res.status(500).json({
+          error: "Erreur interne du serveur lors de l'ajout des membres",
+        });
+      });
+  });
+});
+
 
 app.get("/association/:id/membres", (req, res) => {
   const asso_id = req.params.id;
-  db.all(`SELECT m.*, u.username
+  db.all(`SELECT m.*, u.username, u.email, u.nom, u.prenom, u.photo
     FROM membres m
     LEFT JOIN utilisateurs u ON m.user_id = u.id
     WHERE association_id =?`,
@@ -275,6 +324,7 @@ app.get("/association/:id/membres", (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun membre trouvé" });
             }
+            console.log(row);
             res.status(200).json({
               message:`Membres de l'association ${asso_id}récupérés`,
               body:
@@ -362,7 +412,7 @@ app.put("/association/update/:id", (req, res) => {
   }
   let updateQuery = "UPDATE associations SET ";
   const updateParams = [];
-  const validAttributes = ["nom", "description", "page_web_url", "email", "telphone", "adresse", "ville"];
+  const validAttributes = ["nom", "description", "page_web_url", "email", "telphone", "adresse", "ville", "logo"];
 
   for (const attribute in updatedAsso) {
     if (validAttributes.includes(attribute)) {
@@ -380,6 +430,7 @@ app.put("/association/update/:id", (req, res) => {
 
   updateQuery += " WHERE id = ?";
   updateParams.push(asso_id);
+  console.log("salut 1", updateQuery, updateParams)
   db.run(updateQuery, updateParams, function (err) {
     if (err) {
       console.error("Error updating association:", err.message);
@@ -387,8 +438,10 @@ app.put("/association/update/:id", (req, res) => {
       return;
     }
     if (this.changes === 0) {
+      console.log(updateQuery, updateParams)
       res.status(404).json({ error: "Association not found" });
     } else {
+      console.log("salut", updateQuery, updateParams)
       res.status(200).json({ message: "Association updated successfully" });
     }
   });
@@ -497,3 +550,47 @@ app.delete("/association/delete/:id", (req,res) => {
     }
   );
 })
+
+app.put("/membre/update/:id", (req, res) => {
+  const membre_id = req.params.id;
+  const updatedMembre = req.body;
+  if (!updatedMembre) {
+    res.status(400).json({ error: "Updated member data is required" });
+    return;
+  }
+  let updateQuery = "UPDATE membres SET ";
+  const updateParams = [];
+  const validAttributes = ["role", "date_adhesion", "est_actif"];
+
+  for (const attribute in updatedMembre) {
+    if (validAttributes.includes(attribute)) {
+      if (
+        updatedMembre[attribute] !== undefined &&
+        updatedMembre[attribute] !== ""
+      ) {
+        updateQuery += `${attribute} = ?, `;
+        updateParams.push(updatedMembre[attribute]);
+      }
+    }
+  }
+
+  updateQuery = updateQuery.slice(0, -2);
+
+  updateQuery += " WHERE id = ?";
+  updateParams.push(membre_id);
+  console.log("salut 1", updateQuery, updateParams)
+  db.run(updateQuery, updateParams, function (err) {
+    if (err) {
+      console.error("Error updating association:", err.message);
+      res.status(500).json({ error: "Internal server error." });
+      return;
+    }
+    if (this.changes === 0) {
+      console.log(updateQuery, updateParams, this.changes)
+      res.status(404).json({ error: "Member not found" });
+    } else {
+      console.log("salut", updateQuery, updateParams)
+      res.status(200).json({ message: "Member updated successfully" });
+    }
+  });
+});
