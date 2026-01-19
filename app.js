@@ -5,7 +5,7 @@ const app = express();
 const router  = express.Router();
 const db = new sqlite3.Database("app.db");
 const bcrypt = require('bcrypt');
-const saltRounds = 10; // Nombre de rounds pour générer le salt (plus élevé est le chiffre, plus c'est sécurisé, mais plus ça prend de temps)   
+const saltRounds = 10;   
 app.use(express.json());
 app.use(cors());
 
@@ -19,7 +19,7 @@ app.listen(port, () => {
 });
 
 app.post("/user/register", (req, res) => {
-    const { email, lastName, firstName, password, confirmPassword } = req.body; // Récupérer les données du body
+    const { email, lastName, firstName, password, confirmPassword, photo } = req.body; // Récupérer les données du body
 
     if (!email || !lastName || !firstName || !password || !confirmPassword) {
         return res.status(400).json({
@@ -49,9 +49,9 @@ app.post("/user/register", (req, res) => {
         // Une fois le mot de passe hashé, on l'insère dans la base de données
         db.run(
             `
-            INSERT INTO utilisateurs (username, email, nom, prenom, password_hash)
-            VALUES (?, ?, ?, ?, ?)`,
-            [username, email, lastName, firstName, hash],  // Le hash est stocké à la place du mot de passe en clair
+            INSERT INTO utilisateurs (username, email, nom, prenom, password_hash, photo)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+            [username, email, lastName, firstName, hash, photo],  // Le hash est stocké à la place du mot de passe en clair
             function (err) {
                 if (err) {
                     console.error("Erreur lors de l'ajout de l'utilisateur:", err.message);
@@ -100,7 +100,7 @@ app.post("/user/login", (req, res) => {
       // Si l'utilisateur n'existe pas
       if (!row) {
         return res.status(401).json({
-          error: "Connexion échouée. Vérifiez vos informations d'identification",
+          error: "Connexion échouée. Vérifiez vos informations d'identification.",
         });
       }
   
@@ -117,6 +117,7 @@ app.post("/user/login", (req, res) => {
             error: "Connexion échouée. Vérifiez vos informations d'identification",
           });
         }
+        console.log(row);
         // Si la comparaison réussit
         return res.status(200).json({
             message: "Connexion réussie",
@@ -127,17 +128,17 @@ app.post("/user/login", (req, res) => {
   });
 
 app.post("/association/add", (req, res) => {
-    const {numero_rna, numero_siren, nom, description, page_web_url, email, telephone, user_id, date_pub_jo, logo } = req.body;
-
+    const {numero_rna, numero_siren, nom, description, page_web_url, email, telephone, user_id, date_pub_jo, logo, code_postal, ville, adresse } = req.body;
+  console.log(req.body);
     if((!numero_rna && !numero_siren) || !nom || !description || !user_id || !date_pub_jo){
       return res.status(400).json({
         error: "Certaines informations sont manquantes",
     });
     }
   
-    db.run(`INSERT INTO associations (numero_rna, numero_siren, nom, description, page_web_url, email, telephone, logo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [numero_rna, numero_siren, nom, description, page_web_url, email, telephone, logo],
+    db.run(`INSERT INTO associations (numero_rna, numero_siren, nom, description, page_web_url, email, telephone, logo, code_postal, ville, adresse)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [numero_rna, numero_siren, nom, description, page_web_url, email, telephone, logo, code_postal, ville, adresse],
             function (err) {
               if (err) {
                   console.error("Erreur lors de l'ajout de l'association:", err.message);
@@ -163,7 +164,8 @@ app.post("/association/add", (req, res) => {
                     page_web_url,
                     email,
                     telephone,
-                    date_pub_jo
+                    date_pub_jo,
+                    code_postal
                   }
                 });
             })
@@ -183,31 +185,9 @@ app.get("/user", (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Aucun trouvé" });
       }
-      console.log(row);
+      console.log("Liste utilisateurs", row);
       res.status(200).json({
         message:"utilisateurs récupérés",
-        body:
-          row
-      });
-    }
-  );
-})
-
-app.get("/associations", (req, res) => {
-  db.all(
-    `SELECT * FROM associations`,
-    (err, row) => {
-      if (err) {
-        console.error(err.message);
-        return res
-          .status(500)
-          .json({ error: "Erreur lors de la récupération des associations" });
-      }
-      if (!row) {
-        return res.status(404).json({ error: "Aucune association trouvé" });
-      }
-      res.status(200).json({
-        message:"associations récupérées",
         body:
           row
       });
@@ -245,6 +225,53 @@ app.get("/association/id/:id", (req, res) => {
   db.get(
     `SELECT * FROM associations WHERE id =?`,
     [asso_id],
+    (err, row) => {
+      if (err) {
+        console.error(err.message);
+        return res
+          .status(500)
+          .json({ error: "Erreur lors de la récupération de l'association" });
+      }
+      if (!row) {
+        return res.status(404).json({ error: "Association non trouvé" });
+      }
+      res.status(200).json({
+        message:"association récupérée",
+        body:
+          row
+      });
+    }
+  );
+})
+
+app.get("/association", (req, res) => {
+  db.all(
+    `SELECT * FROM associations`,
+    (err, row) => {
+      if (err) {
+        console.error(err.message);
+        return res
+          .status(500)
+          .json({ error: "Erreur lors de la récupération de l'association" });
+      }
+      if (!row) {
+        return res.status(404).json({ error: "Association non trouvé" });
+      }
+      res.status(200).json({
+        message:"association récupérée",
+        body:
+          row
+      });
+    }
+  );
+})
+
+app.get("/association/cp/:cp", (req, res) => {
+  const asso_cp = req.params.cp;
+  const dep = asso_cp + "%";
+  db.all(
+    `SELECT * FROM associations WHERE code_postal LIKE ?`,
+    [dep],
     (err, row) => {
       if (err) {
         console.error(err.message);
@@ -358,8 +385,8 @@ app.get("/association/:id/membres", (req, res) => {
 
 app.get("/user/:id/associations", (req, res) => {
   const user_id = req.params.id;  
-  db.all(`SELECT m.*, u.*, a.*
-    FROM membres m
+  db.all(`SELECT DISTINCT m.*, u.*, a.*
+    FROM membres m  
     LEFT JOIN utilisateurs u ON m.user_id = u.id
     LEFT JOIN associations a ON m.association_id = a.id
     WHERE user_id =?`,
@@ -434,7 +461,7 @@ app.put("/association/update/:id", (req, res) => {
   }
   let updateQuery = "UPDATE associations SET ";
   const updateParams = [];
-  const validAttributes = ["nom", "description", "page_web_url", "email", "telphone", "adresse", "ville", "logo"];
+  const validAttributes = ["nom", "description", "page_web_url", "email", "telephone", "adresse", "ville", "logo", "code_postal"];
 
   for (const attribute in updatedAsso) {
     if (validAttributes.includes(attribute)) {
@@ -617,9 +644,9 @@ app.put("/membre/update/:id", (req, res) => {
   });
 });
 
-app.delete("/delete/membres/", (req, res) => {
+app.post("/membre/delete/", (req, res) => {
   const membres = req.body.deletedMembers;
-
+  console.log("req.body", req.body);
   if (!Array.isArray(membres) || membres.length === 0) {
     return res.status(400).json({
       error: "Un tableau de membres est requis",
@@ -671,3 +698,70 @@ app.delete("/delete/membres/", (req, res) => {
       });
   });
 });
+
+
+app.delete("/tresorerie/:id/delete/", (req,res) => {
+  const tresorerie_id = req.params.id;
+  db.run(
+    "DELETE FROM tresorerie WHERE id = ?",
+    [tresorerie_id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting user:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+        return;
+      } else {
+        res.status(200).json({
+          message: "Membres and related information deleted successfully",
+        });
+      }
+    }
+  );
+})
+
+app.post("/events/add", (req, res) => {
+    const {association_id, titre, description, date_debut, date_fin, heure_debut, heure_fin, responsable_id, lieu, type } = req.body;
+        console.log(association_id, titre, description, date_debut, date_fin, heure_debut, heure_fin, responsable_id, lieu, type )
+    if(!association_id || !titre || !description || !date_debut || !lieu || !type){
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes",
+    });
+    }
+    db.run(`INSERT INTO events (association_id, titre, description, date_debut, date_fin, heure_debut, heure_fin, lieu, type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [association_id, titre, description, date_debut, date_fin, heure_debut, heure_fin, lieu, type],
+            function (err) {
+        if (err) {
+            console.error("Erreur lors de l'ajout de l'évènement :", err.message);
+            return res.status(500).json({ error: "Erreur interne du serveur" });
+        }
+
+        // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+        res.status(200).json({ id: this.lastID });
+    }
+  )
+})
+
+app.get("/association/:id/events",  (req, res) => {
+  const asso_id = req.params.id;
+  db.all(`SELECT * FROM events 
+          WHERE association_id =?`,
+          [asso_id],
+          (err, row) => {
+            if (err) {
+              console.error(err.message);
+              return res
+                .status(500)
+                .json({ error: "Erreur lors de la récupération des évèneents" });
+            }
+            if (!row) {
+              return res.status(404).json({ error: "Aucun évènement trouvé" });
+            }
+            res.status(200).json({
+              message:`Evènements de l'association ${asso_id}récupérés`,
+              body:
+                row
+            });
+          }
+  ) 
+})
