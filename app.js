@@ -765,3 +765,29 @@ app.get("/association/:id/events",  (req, res) => {
           }
   ) 
 })
+
+app.get("/association/:id/events/:type",  (req, res) => {
+  const asso_id = req.params.id;
+  const type = req.params.type;
+  db.all(`SELECT * FROM events 
+          WHERE association_id =?
+          AND type =?`,
+          [asso_id, type],
+          (err, row) => {
+            if (err) {
+              console.error(err.message);
+              return res
+                .status(500)
+                .json({ error: "Erreur lors de la récupération des évèneents" });
+            }
+            if (!row) {
+              return res.status(404).json({ error: "Aucun évènement trouvé" });
+            }
+            res.status(200).json({
+              message:`${type} de l'association ${asso_id}récupérés`,
+              body:
+                row
+            });
+          }
+  ) 
+})
