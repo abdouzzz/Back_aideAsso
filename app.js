@@ -9,6 +9,10 @@ const saltRounds = 10;
 app.use(express.json());
 app.use(cors());
 
+db.serialize(() => {
+  db.run("PRAGMA foreign_keys = ON");
+});
+
 app.get('/', (req,res) => {
   res.send('App is running...')
 })
@@ -362,24 +366,24 @@ app.get("/association/:id/membres", (req, res) => {
     FROM membres m
     LEFT JOIN utilisateurs u ON m.user_id = u.id
     WHERE association_id =?`,
-          [asso_id],
-          (err, row) => {
-            if (err) {
-              console.error(err.message);
-              return res
-                .status(500)
-                .json({ error: "Erreur lors de la récupération des membres" });
-            }
-            if (!row) {
-              return res.status(404).json({ error: "Aucun membre trouvé" });
-            }
-            console.log(row);
-            res.status(200).json({
-              message:`Membres de l'association ${asso_id}récupérés`,
-              body:
-                row
-            });
-          }
+    [asso_id],
+    (err, row) => {
+      if (err) {
+        console.error(err.message);
+        return res
+          .status(500)
+          .json({ error: "Erreur lors de la récupération des membres" });
+      }
+      if (!row) {
+        return res.status(404).json({ error: "Aucun membre trouvé" });
+      }
+      console.log(row);
+      res.status(200).json({
+        message:`Membres de l'association ${asso_id}récupérés`,
+        body:
+          row
+      });
+    }
   ) 
 })
 
@@ -721,7 +725,6 @@ app.delete("/tresorerie/:id/delete/", (req,res) => {
 
 app.post("/events/add", (req, res) => {
     const {association_id, titre, description, date_debut, date_fin, heure_debut, heure_fin, responsable_id, lieu, type } = req.body;
-        console.log(association_id, titre, description, date_debut, date_fin, heure_debut, heure_fin, responsable_id, lieu, type )
     if(!association_id || !titre || !description || !date_debut || !lieu || !type){
       return res.status(400).json({
         error: "Certaines informations sont manquantes",
@@ -735,21 +738,54 @@ app.post("/events/add", (req, res) => {
             console.error("Erreur lors de l'ajout de l'évènement :", err.message);
             return res.status(500).json({ error: "Erreur interne du serveur" });
         }
-
         // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
-        res.status(200).json({ id: this.lastID });
+        res.status(200).json(
+          { body: 
+            {id: this.lastID}
+          }
+        );
     }
   )
 })
 
 app.get("/association/:id/events",  (req, res) => {
   const asso_id = req.params.id;
-  db.all(`SELECT * FROM events 
-          WHERE association_id =?`,
+  db.all(`WITH event_cte AS (
+  SELECT 
+    e.*,
+    json_group_array(
+          json_object(
+            'user_id', u.id,
+            'name', u.username,
+            'email', u.email
+          )
+    ) AS participants
+  FROM events e
+  LEFT JOIN eventParticipants ep 
+    ON ep.evenement_id = e.id
+  LEFT JOIN utilisateurs u 
+    ON u.id = ep.participant_id
+  WHERE e.association_id = ?
+  GROUP BY e.id
+)
+
+SELECT json_group_array(
+         json_object(
+           'id', id,
+           'titre', titre,
+           'date_debut', date_debut,
+           'date_fin', date_fin,
+           'description', description,
+           'lieu', lieu,
+           'type', type,
+           'participants', participants
+         )
+       ) AS events
+FROM event_cte`,
           [asso_id],
           (err, row) => {
             if (err) {
-              console.error(err.message);
+              console.error(err);
               return res
                 .status(500)
                 .json({ error: "Erreur lors de la récupération des évèneents" });
@@ -760,7 +796,7 @@ app.get("/association/:id/events",  (req, res) => {
             res.status(200).json({
               message:`Evènements de l'association ${asso_id}récupérés`,
               body:
-                row
+                JSON.parse(row[0].events)
             });
           }
   ) 
@@ -769,9 +805,40 @@ app.get("/association/:id/events",  (req, res) => {
 app.get("/association/:id/events/:type",  (req, res) => {
   const asso_id = req.params.id;
   const type = req.params.type;
-  db.all(`SELECT * FROM events 
-          WHERE association_id =?
-          AND type =?`,
+  db.all(`WITH event_cte AS (
+  SELECT 
+    e.*,
+    json_group_array(
+          json_object(
+            'user_id', u.id,
+            'name', u.username,
+            'email', u.email
+          )
+    ) AS participants
+  FROM events e
+  LEFT JOIN eventParticipants ep 
+    ON ep.evenement_id = e.id
+  LEFT JOIN utilisateurs u 
+    ON u.id = ep.participant_id
+  WHERE e.association_id = ?
+  AND type = ?
+  GROUP BY e.id
+)
+
+SELECT json_group_array(
+         json_object(
+           'id', id,
+           'titre', titre,
+           'date_debut', date_debut,
+           'date_fin', date_fin,
+           'description', description,
+           'lieu', lieu,
+           'type', type,
+           'participants', participants
+         )
+       ) AS events
+FROM event_cte
+          `,
           [asso_id, type],
           (err, row) => {
             if (err) {
@@ -783,11 +850,98 @@ app.get("/association/:id/events/:type",  (req, res) => {
             if (!row) {
               return res.status(404).json({ error: "Aucun évènement trouvé" });
             }
+            const events = JSON.parse(row[0].events);
+
+            // 2️⃣ Parse les participants pour chaque event
+            const parsedEvents = events.map(event => ({
+              ...event,
+              participants: event.participants
+                ? JSON.parse(event.participants)
+                : []
+            }));
             res.status(200).json({
               message:`${type} de l'association ${asso_id}récupérés`,
               body:
-                row
+                parsedEvents
             });
           }
   ) 
+})
+
+app.post("/events/:id/add/:participants/", (req, res) => {
+  const event_id = req.params.id;
+  const participants = req.body;
+
+  if (!Array.isArray(participants) || participants.length === 0) {
+    return res.status(400).json({
+      error: "Un tableau de participants est requis",
+    });
+  }
+
+  const query = `INSERT INTO eventParticipants (evenement_id, participant_id) VALUES (?, ?)`;
+  console.log(participants);
+  for (const participant of participants) {
+    const { user_id } = participant;
+    if (!user_id) {
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes pour un ou plusieurs participants",
+      });
+    }
+  }
+
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    const insertPromises = participants.map((participant) => {
+      return new Promise((resolve, reject) => {
+        db.run(
+          query,
+          [event_id, participant.user_id],
+          function (err) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(this.lastID);
+            }
+          }
+        );
+      });
+    });
+
+    Promise.all(insertPromises)
+      .then((ids) => {
+        db.run("COMMIT");
+        res.status(200).json({
+          message: "Tous les participants ont été ajoutés avec succès",
+          body: {
+            ids,
+          },
+        });
+      })
+      .catch((err) => {
+        db.run("ROLLBACK");
+        console.error("Erreur lors de l'ajout des participants:", err.message);
+        res.status(500).json({
+          error: "Erreur interne du serveur lors de l'ajout des participants",
+        });
+      });
+  });
+});
+
+app.delete("/events/delete/:id", (req,res) => {
+  const event_id = req.params.id;
+  db.run(
+    "DELETE FROM events WHERE id = ?",
+    [event_id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting user:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+        return;
+      } else {
+        res.status(200).json({
+          message: "Events and related information deleted successfully",
+        });
+      }
+    }
+  );
 })

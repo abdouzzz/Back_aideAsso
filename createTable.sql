@@ -47,8 +47,13 @@ CREATE TABLE evenements (
     date_debut DATE NOT NULL,
     date_fin DATE,
     lieu VARCHAR(255),
-    logo BLOB,
-    responsable_id INTEGER REFERENCES membres(id) ON DELETE SET NULL -- Responsable de l'événement
+    type VARCHAR(255),
+);
+
+CREATE TABLE eventParticipants (
+    evenement_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+    participant_id INTEGER REFERENCES utilisateurs(id) ON DELETE CASCADE,
+    PRIMARY KEY (evenement_id, participant_id)
 );
 
 -- Documents
