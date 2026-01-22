@@ -501,16 +501,16 @@ app.put("/association/update/:id", (req, res) => {
 });
 
 app.post("/tresorerie/add", (req, res) => {
-  const {nom_transaction, association_id, operation, date_operation, tiers} = req.body;
-  if(!nom_transaction || !association_id || !date_operation || !operation || !tiers){
+  const {nom_transaction, association_id, operation, date_operation, tiers, categorie} = req.body;
+  if(!nom_transaction || !association_id || !date_operation || !operation || !tiers || !categorie){
     return res.status(400).json({
       error: "Certaines informations sont manquantes",
   });
   }
 
-db.run(`INSERT INTO tresorerie (nom_transaction, association_id, operation, date_operation, tiers)
-        VALUES (?, ?, ?, ?, ?)`,
-      [nom_transaction, association_id, operation, date_operation, tiers],
+db.run(`INSERT INTO tresorerie (nom_transaction, association_id, operation, date_operation, tiers, categorie)
+        VALUES (?, ?, ?, ?, ?, ?)`,
+      [nom_transaction, association_id, operation, date_operation, tiers, categorie],
       function (err) {
         if (err) {
             console.error("Erreur lors de l'ajout de la transaction :", err.message);

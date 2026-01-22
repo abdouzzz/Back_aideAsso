@@ -71,5 +71,6 @@ CREATE TABLE tresorerie (
     association_id INTEGER REFERENCES associations(id) ON DELETE CASCADE,
     operation REAL NOT NULL,
     date_operation DATE NOT NULL,
-    tiers VARCHAR(255) NOT NULL
+    tiers VARCHAR(255) NOT NULL,
+    categorie TEXT NOT NULL
 );
