@@ -5,12 +5,17 @@ const app = express();
 const router  = express.Router();
 const db = new sqlite3.Database("app.db");
 const bcrypt = require('bcrypt');
+const multer = require('multer');
 const saltRounds = 10;   
 app.use(express.json());
 app.use(cors());
 
 db.serialize(() => {
   db.run("PRAGMA foreign_keys = ON");
+});
+
+const upload = multer({
+  storage: multer.memoryStorage()
 });
 
 app.get('/', (req,res) => {
@@ -805,39 +810,52 @@ FROM event_cte`,
 app.get("/association/:id/events/:type",  (req, res) => {
   const asso_id = req.params.id;
   const type = req.params.type;
-  db.all(`WITH event_cte AS (
-  SELECT 
-    e.*,
-    json_group_array(
+  db.all(`  WITH event_cte AS (
+      SELECT 
+        e.*,
+        d.id AS document_id,
+        d.titre AS document_titre,
+        json_group_array(
           json_object(
             'user_id', u.id,
             'name', u.username,
             'email', u.email
           )
-    ) AS participants
-  FROM events e
-  LEFT JOIN eventParticipants ep 
-    ON ep.evenement_id = e.id
-  LEFT JOIN utilisateurs u 
-    ON u.id = ep.participant_id
-  WHERE e.association_id = ?
-  AND type = ?
-  GROUP BY e.id
-)
+        ) AS participants
+      FROM events e
+      LEFT JOIN eventParticipants ep 
+        ON ep.evenement_id = e.id
+      LEFT JOIN utilisateurs u 
+        ON u.id = ep.participant_id
+      LEFT JOIN documents d
+        ON d.id = e.document_id
+      WHERE e.association_id = ?
+        AND e.type = ?
+      GROUP BY e.id
+    )
 
-SELECT json_group_array(
-         json_object(
-           'id', id,
-           'titre', titre,
-           'date_debut', date_debut,
-           'date_fin', date_fin,
-           'description', description,
-           'lieu', lieu,
-           'type', type,
-           'participants', participants
-         )
-       ) AS events
-FROM event_cte
+    SELECT json_group_array(
+      json_object(
+        'id', id,
+        'titre', titre,
+        'date_debut', date_debut,
+        'date_fin', date_fin,
+        'description', description,
+        'lieu', lieu,
+        'type', type,
+        'participants', participants,
+        'document',
+          CASE
+            WHEN document_id IS NOT NULL THEN
+              json_object(
+                'id', document_id,
+                'titre', document_titre
+              )
+            ELSE NULL
+          END
+      )
+    ) AS events
+    FROM event_cte
           `,
           [asso_id, type],
           (err, row) => {
@@ -945,3 +963,428 @@ app.delete("/events/delete/:id", (req,res) => {
     }
   );
 })
+
+app.post("/association/:id/add/budget", (req, res) => {
+  console.log(req.body)
+  const association_id = req.params.id;
+  const { titre, date_debut, date_fin, budgets } = req.body;
+  if(!association_id || !titre || !date_debut || !date_fin || budgets.length < 1){
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes",
+    });
+  }
+  db.run(`INSERT INTO budget (association_id, titre, date_debut, date_fin)
+          VALUES (?, ?, ?, ?)`,
+          [association_id, titre, date_debut, date_fin, ],
+          function (err) {
+            if (err) {
+              console.error("Erreur lors de l'ajout du budget :", err.message);
+              return res.status(500).json({ error: "Erreur interne du serveur" });
+            }
+            const id = this.lastID
+            const query = `INSERT INTO budget_lignes (budget_id, categorie, montant_prevu) VALUES (?, ?, ?)`;
+            for (const ligne of budgets) {
+              const { categorie, montant_prevu } = ligne;
+              if (!categorie || !montant_prevu) {
+                return res.status(400).json({
+                  error: "Certaines informations sont manquantes pour un ou plusieurs budgets",
+                });
+              }
+            }
+          
+            db.serialize(() => {
+              db.run("BEGIN TRANSACTION");
+              const insertPromises = budgets.map((budget) => {
+                return new Promise((resolve, reject) => {
+                  db.run(
+                    query,
+                    [id, budget.categorie, budget.montant_prevu],
+                    function (err) {
+                      if (err) {
+                        reject(err);
+                      } else {
+                        resolve(this.lastID);
+                      }
+                    }
+                  );
+                });
+              });
+            
+              Promise.all(insertPromises)
+                .then((ids) => {
+                  db.run("COMMIT");
+                  res.status(200).json({
+                    message: "Tous les budgets ont été ajoutés avec succès",
+                    body: {
+                      ids,
+                    },
+                  });
+                })
+                .catch((err) => {
+                  db.run("ROLLBACK");
+                  console.error("Erreur lors de l'ajout des budgets:", err.message);
+                  res.status(500).json({
+                    error: "Erreur interne du serveur lors de l'ajout des budgets",
+                  });
+                });
+            });
+            // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+          }
+        )
+})
+
+app.get("/association/:id/budgets", (req, res) => {
+  const association_id = req.params.id;
+
+  if (!association_id) {
+    return res.status(400).json({
+      error: "ID du budget manquant",
+    });
+  }
+
+  const query = `
+    SELECT b.*, COALESCE(SUM(bl.montant_prevu), 0) AS montant_total
+    FROM budget_lignes bl
+    LEFT JOIN budget b
+      ON bl.budget_id = b.id
+    WHERE b.association_id = ?
+    GROUP BY b.id
+  `;
+
+  db.all(query, [association_id], (err, rows) => {
+    if (err) {
+      console.error("Erreur SQL suivi budget :", err.message);
+      return res.status(500).json({
+        error: "Erreur lors de la récupération du suivi budgétaire",
+      });
+    }
+
+    res.status(200).json({
+      message: "Suivi budgétaire récupéré avec succès",
+      body: rows,
+    });
+  });
+});
+
+app.get("/budgets/:id/suivi", (req, res) => {
+  const budget_id = req.params.id;
+
+  if (!budget_id) {
+    return res.status(400).json({
+      error: "ID du budget manquant",
+    });
+  }
+
+  const query = `
+    SELECT 
+      bl.categorie,
+      bl.montant_prevu,
+      COALESCE(SUM(t.operation), 0) AS montant_reel,
+      ROUND(
+        (COALESCE(SUM(t.operation) * -1, 0) / bl.montant_prevu) * 100,
+        2
+      ) AS taux_utilisation
+    FROM budget_lignes bl
+    JOIN budget b ON b.id = bl.budget_id
+    LEFT JOIN tresorerie t
+      ON t.categorie = bl.categorie
+     AND t.date_operation BETWEEN b.date_debut AND b.date_fin
+     AND t.operation < 0
+    WHERE bl.budget_id = ?
+    GROUP BY bl.categorie, bl.montant_prevu
+  `;
+
+  db.all(query, [budget_id], (err, rows) => {
+    if (err) {
+      console.error("Erreur SQL suivi budget :", err.message);
+      return res.status(500).json({
+        error: "Erreur lors de la récupération du suivi budgétaire",
+      });
+    }
+
+    res.status(200).json({
+      message: "Suivi budgétaire récupéré avec succès",
+      body: rows,
+    });
+  });
+});
+
+app.get("/association/:id/actions", (req, res) => {
+  const association_id = req.params.id;
+
+  if (!association_id) {
+    return res.status(400).json({
+      error: "ID du budget manquant",
+    });
+  }
+
+  const query = `
+    SELECT
+  json_group_object(
+    etat,
+    actions
+  ) AS actions_par_etat
+FROM (
+  SELECT
+    ac.etat AS etat,
+    json_group_array(
+      json_object(
+        'titre', ac.titre,
+        'id', ac.id,
+        'description', ac.description,
+        'deadline', ac.deadline,
+        'priorite', ac.priorite,
+        'responsable_id', ac.responsable_id,
+        'responsable_name', u.username,
+        'categorie', ac.categorie
+      )
+    ) AS actions
+  FROM actions ac
+  LEFT JOIN utilisateurs u
+    ON u.id = ac.responsable_id
+  WHERE ac.association_id = ?
+  GROUP BY ac.etat
+);
+  `;
+
+  db.all(query, [association_id], (err, rows) => {
+    if (err) {
+      console.error("Erreur SQL suivi budget :", err.message);
+      return res.status(500).json({
+        error: "Erreur lors de la récupération du suivi budgétaire",
+      });
+    }
+    const result = {
+    TODO: [],
+    DOING: [],
+    DONE: []
+  };
+    const actions = JSON.parse(rows[0].actions_par_etat);
+    Object.keys(actions).forEach((etat) => {
+    result[etat] = JSON.parse(actions[etat]);
+  });
+    res.status(200).json({
+      message: "Suivi budgétaire récupéré avec succès",
+      body: result,
+    });
+  });
+});
+
+app.post("/association/:id/add/actions", (req, res) => {
+  const association_id = req.params.id;
+  const actions = req.body;
+  console.log(req.body)
+  console.log(actions)
+  if(actions.length < 1){
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes",
+    });
+  }
+  const query = `INSERT INTO actions (titre, description, deadline, categorie, priorite, etat, responsable_id, association_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`          
+            db.serialize(() => {
+              db.run("BEGIN TRANSACTION");
+              const insertPromises = actions.map((action) => {
+                return new Promise((resolve, reject) => {
+                  db.run(
+                    query,
+                    [action.titre, action.description, action.deadline, action.categorie, action.priorite, action.etat, action.responsable_id, association_id],
+                    function (err) {
+                      if (err) {
+                        reject(err);
+                      } else {
+                        resolve(this.lastID);
+                      }
+                    }
+                  );
+                });
+              });
+            
+              Promise.all(insertPromises)
+                .then((ids) => {
+                  db.run("COMMIT");
+                  res.status(200).json({
+                    message: "Toutes les actions ont été ajoutés avec succès",
+                    body: {
+                      ids,
+                    },
+                  });
+                })
+                .catch((err) => {
+                  db.run("ROLLBACK");
+                  console.error("Erreur lors de l'ajout des actions:", err.message);
+                  res.status(500).json({
+                    error: "Erreur interne du serveur lors de l'ajout des budgets",
+                  });
+                });
+            });
+            // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+})
+
+app.delete("/actions/delete/:id", (req,res) => {
+  const action_id = req.params.id;
+  db.run(
+    "DELETE FROM actions WHERE id = ?",
+    [action_id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting action:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+        return;
+      } else {
+        res.status(200).json({
+          message: "Actions deleted successfully",
+        });
+      }
+    }
+  );
+})
+
+app.put("/actions/update/:id", (req, res) => {
+  const action_id = req.params.id;
+  const updatedAction = req.body;
+  if (!updatedAction) {
+    res.status(400).json({ error: "Updated action data is required" });
+    return;
+  }
+  let updateQuery = "UPDATE actions SET ";
+  const updateParams = [];
+  const validAttributes = ["etat"];
+console.log(updatedAction)
+  for (const attribute in updatedAction) {
+          console.log(updatedAction[0])
+          console.log(attribute)
+    if (validAttributes.includes(attribute)) {
+      if (
+        updatedAction[attribute] !== undefined &&
+        updatedAction[attribute] !== ""
+      ) {
+        updateQuery += `${attribute} = ?, `;
+        updateParams.push(updatedAction[attribute]);
+      }
+    }
+  }
+
+  updateQuery = updateQuery.slice(0, -2);
+
+  updateQuery += " WHERE id = ?";
+  updateParams.push(action_id);
+  db.run(updateQuery, updateParams, function (err) {
+    if (err) {
+      console.error("Error updating action:", err.message);
+      res.status(500).json({ error: "Internal server error." });
+      return;
+    }
+    if (this.changes === 0) {
+      res.status(404).json({ error: "Action not found" });
+    } else {
+      res.status(200).json({ message: "Action updated successfully" });
+    }
+  });
+});
+
+app.put("/events/update/:id", (req, res) => {
+  const event_id = req.params.id;
+  const updatedEvent = req.body;
+  if (!updatedEvent) {
+    res.status(400).json({ error: "Updated event data is required" });
+    return;
+  }
+  let updateQuery = "UPDATE events SET ";
+  const updateParams = [];
+  const validAttributes = ["titre", "description", "date_debut", "date_fin", "type", "lieu", "document_id"];
+console.log(updatedEvent)
+  for (const attribute in updatedEvent) {
+          console.log(updatedEvent[0])
+          console.log(attribute)
+    if (validAttributes.includes(attribute)) {
+      if (
+        updatedEvent[attribute] !== undefined &&
+        updatedEvent[attribute] !== ""
+      ) {
+        updateQuery += `${attribute} = ?, `;
+        updateParams.push(updatedEvent[attribute]);
+      }
+    }
+  }
+
+  updateQuery = updateQuery.slice(0, -2);
+
+  updateQuery += " WHERE id = ?";
+  updateParams.push(event_id);
+  db.run(updateQuery, updateParams, function (err) {
+    if (err) {
+      console.error("Error updating event:", err.message);
+      res.status(500).json({ error: "Internal server error." });
+      return;
+    }
+    if (this.changes === 0) {
+      res.status(404).json({ error: "event not found" });
+    } else {
+      res.status(200).json({ message: "event updated successfully" });
+    }
+  });
+});
+
+app.post("/documents/add",  upload.single("contenu"), (req, res) => {
+    const {association_id, titre } = req.body;
+    const contenu = req.file?.buffer; // ✅ le Blob arrive ici
+ console.log("BODY:", req.body);
+    console.log("FILE:", req.file);
+    if(!association_id || !titre || !contenu){
+      return res.status(400).json({
+        error: "Certaines informations sont manquantes",
+    });
+    }
+    db.run(`INSERT INTO documents (association_id, titre, contenu)
+            VALUES (?, ?, ?)`,
+            [association_id, titre, contenu],
+            function (err) {
+        if (err) {
+            console.error("Erreur lors de l'ajout du document :", err.message);
+            return res.status(500).json({ error: "Erreur interne du serveur" });
+        }
+        // Si tout est correct, on renvoie l'ID de l'utilisateur et son email
+        res.status(200).json(
+          { body: 
+            {id: this.lastID}
+          }
+        );
+    }
+  )
+})
+
+app.get("/documents/:id", (req, res) => {
+  const document_id = req.params.id;
+
+  if (!document_id) {
+    return res.status(400).json({
+      error: "ID du document manquant",
+    });
+  }
+
+    db.get(`SELECT titre, contenu FROM documents WHERE id = ?`,
+    [document_id],
+    (err, row) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (!row) {
+        return res.status(404).json({ error: "Document introuvable" });
+      }
+
+      const pdfBuffer = row.contenu; // BLOB SQLite → Buffer Node
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${row.titre}.pdf"`
+      );
+      res.setHeader("Content-Length", pdfBuffer.length);
+res.setHeader("Cache-Control", "no-store");
+
+      res.send(pdfBuffer); // ✅ renvoi binaire
+    }
+  );
+});

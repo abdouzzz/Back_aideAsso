@@ -50,6 +50,40 @@ CREATE TABLE evenements (
     type VARCHAR(255),
 );
 
+CREATE TABLE budget (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    association_id INTEGER REFERENCES associations(id) ON DELETE CASCADE,
+    titre VARCHAR(255) NOT NULL,
+    date_debut DATE NOT NULL,
+    date_fin DATE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE budget_lignes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  budget_id INTEGER NOT NULL,
+  categorie TEXT NOT NULL,
+  montant_prevu DECIMAL(10,2) NOT NULL,
+
+  FOREIGN KEY (budget_id)
+    REFERENCES budget(id)
+    ON DELETE CASCADE,
+
+  UNIQUE (budget_id, categorie)
+);
+
+CREATE TABLE actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titre VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    deadline DATE NOT NULL,
+    categorie TEXT NOT NULL,
+    priorite TEXT NOT NULL,
+    etat TEXT NOT NULL,
+    responsable_id INTEGER REFERENCES utilisateurs(id) ON DELETE CASCADE,
+    association_id INTEGER REFERENCES associations(id) ON DELETE CASCADE
+);
+
 CREATE TABLE eventParticipants (
     evenement_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
     participant_id INTEGER REFERENCES utilisateurs(id) ON DELETE CASCADE,
@@ -61,7 +95,7 @@ CREATE TABLE documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     association_id INTEGER REFERENCES associations(id) ON DELETE CASCADE,
     titre VARCHAR(255) NOT NULL,
-    contenu BLOB,
+    contenu BLOB NOT NULL
 );
 
 -- Trésorerie 
