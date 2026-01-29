@@ -420,6 +420,34 @@ app.get("/user/:id/associations", (req, res) => {
   ) 
 })
 
+app.get("/user/:user_id/associations/:asso_id", (req, res) => {
+  const user_id = req.params.user_id;  
+  const asso_id = req.params.asso_id;  
+  db.get(`SELECT *
+    FROM membres m  
+    WHERE user_id =?
+    AND association_id =?`,
+          [user_id, asso_id],
+          (err, row) => {
+            if (err) {
+              console.error(err.message);
+              return res
+                .status(500)
+                .json({ error: "Erreur lors de la récupération du membre" });
+            }
+            if (!row) {
+              return res.status(404).json({ error: "Aucun membre trouvé" });
+            }
+            console.log(row);
+            res.status(200).json({
+              message:`Informations de l'utilisateur ${user_id} pour l'association ${asso_id} récupérées`,
+              body:
+                row
+            });
+          }
+  ) 
+})
+
 app.put("/user/update/:id", (req, res) => {
   const user_id = req.params.id;
   const updatedUser = req.body;
@@ -798,10 +826,19 @@ FROM event_cte`,
             if (!row) {
               return res.status(404).json({ error: "Aucun évènement trouvé" });
             }
+             const events = JSON.parse(row[0].events);
+
+            // 2️⃣ Parse les participants pour chaque event
+            const parsedEvents = events.map(event => ({
+              ...event,
+              participants: event.participants
+                ? JSON.parse(event.participants)
+                : []
+            }));
             res.status(200).json({
               message:`Evènements de l'association ${asso_id}récupérés`,
               body:
-                JSON.parse(row[0].events)
+                parsedEvents
             });
           }
   ) 
@@ -899,8 +936,8 @@ app.post("/events/:id/add/:participants/", (req, res) => {
   const query = `INSERT INTO eventParticipants (evenement_id, participant_id) VALUES (?, ?)`;
   console.log(participants);
   for (const participant of participants) {
-    const { user_id } = participant;
-    if (!user_id) {
+    const { code } = participant;
+    if (!code) {
       return res.status(400).json({
         error: "Certaines informations sont manquantes pour un ou plusieurs participants",
       });
@@ -913,7 +950,7 @@ app.post("/events/:id/add/:participants/", (req, res) => {
       return new Promise((resolve, reject) => {
         db.run(
           query,
-          [event_id, participant.user_id],
+          [event_id, participant.code],
           function (err) {
             if (err) {
               reject(err);
